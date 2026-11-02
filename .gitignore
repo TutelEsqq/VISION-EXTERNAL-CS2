@@ -1,0 +1,32 @@
+# Visual Studio cache
+.vs/
+*.ipch
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build output
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]in/
+[Oo]bj/
+out/
+build/
+*.exe
+*.dll
+*.pdb
+*.obj
+*.ilk
+*.iobj
+*.ipdb
+*.idb
+*.tlog
+*.log
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
