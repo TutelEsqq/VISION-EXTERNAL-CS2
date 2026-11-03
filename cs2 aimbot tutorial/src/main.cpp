@@ -1,4 +1,5 @@
 #include "cheat/entity.hpp"
+#include "cheat/movement.hpp"
 #include "render/overlay.hpp"
 
 int main()
@@ -21,5 +22,8 @@ int main()
 
 		// run aimbot code
 		aimbot.doAimbot();
+
+		// auto-stop / counter-strafe helper
+		movement::Tick();
 	}
 }

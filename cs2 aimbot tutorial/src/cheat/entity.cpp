@@ -1,6 +1,9 @@
 #include "entity.hpp"
+#include "../render/settings.hpp"
+#include "chams.hpp"
 
 #include <cmath>
+#include <cstring>
 #include <utility>
 
 Vector GetHeadPosition(const C_CSPlayerPawn& player)
@@ -25,6 +28,38 @@ Vector GetHeadPosition(const C_CSPlayerPawn& player)
 
 namespace
 {
+	// chams: force the engine's own glow system on an enemy pawn. The fields live in
+	// the networked CGlowProperty - the server only resends them when IT changes glow
+	// state, so our local writes stick for enemies that are not glowing server-side.
+	void ApplyChams(uintptr_t pawn)
+	{
+		const uintptr_t glow = pawn + offset::m_Glow;
+
+		mem.Write<int>(glow + offset::glow_iGlowType, 1);        // entity glow
+		mem.Write<int>(glow + offset::glow_nGlowRange, 1 << 20); // visible through anything
+		mem.Write<int>(glow + offset::glow_nGlowRangeMin, 0);
+
+		const ImVec4& c = g_settings.chamColor;
+
+		mem.Write<float>(glow + offset::glow_fGlowColor + 0x0, c.x);
+		mem.Write<float>(glow + offset::glow_fGlowColor + 0x4, c.y);
+		mem.Write<float>(glow + offset::glow_fGlowColor + 0x8, c.z);
+
+		// Color stores rgba bytes in memory order
+		const uint32_t overrideColor =
+			static_cast<uint32_t>(c.x * 255.f) |
+			(static_cast<uint32_t>(c.y * 255.f) << 8) |
+			(static_cast<uint32_t>(c.z * 255.f) << 16) |
+			(static_cast<uint32_t>(c.w * 255.f) << 24);
+
+		mem.Write<uint32_t>(glow + offset::glow_colorOverride, overrideColor);
+
+		mem.Write<float>(glow + offset::glow_flGlowStartTime, 0.f);      // started long ago
+		mem.Write<float>(glow + offset::glow_flGlowTime, 1 << 14);       // no fade-out
+		mem.Write<bool>(glow + offset::glow_bEligible, true);
+		mem.Write<bool>(glow + offset::glow_bGlowing, true);             // the actual switch
+	}
+
 	// Candidate layouts for the entity list. Runs once when the normal walk finds nothing,
 	// so we learn which offset/stride this build uses instead of guessing patches later.
 	void ProbeLayout(uintptr_t entityList)
@@ -141,7 +176,10 @@ void Reader::ThreadLoop()
 
 		while (mem.Alive())
 		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(16));
+			// poll interval is configurable from the Properties tab - lower = fresher
+			// entity list, higher = less CPU spent on RPM reads
+			std::this_thread::sleep_for(std::chrono::milliseconds(
+				g_settings.pollMs > 0 ? g_settings.pollMs : 1));
 
 			FilterPlayers();
 		}
@@ -263,6 +301,38 @@ void Reader::FilterPlayers()
 		entity.team = team;
 		entity.Position = mem.Read<Vector>(pawn + offset::m_vOldOrigin);
 		entity.headPos = GetHeadPosition(entity);
+
+		// skeleton: one read for all bones, position at +0x0 of each 0x20 entry
+		if (entity.boneArray)
+		{
+			uint8_t boneBlob[offset::maxBones * offset::boneStride]{};
+
+			if (mem.ReadRaw(entity.boneArray, boneBlob, sizeof(boneBlob)))
+			{
+				bool anyValid = false;
+
+				for (int b = 0; b < offset::maxBones; ++b)
+				{
+					Vector bone;
+					std::memcpy(&bone, boneBlob + b * offset::boneStride, sizeof(Vector));
+
+					// garbage scene node / stale cache guard, same as GetHeadPosition
+					if (bone.IsFinite() &&
+						std::fabs(bone.x) < 16384.f && std::fabs(bone.y) < 16384.f && std::fabs(bone.z) < 16384.f)
+					{
+						entity.bones[b] = bone;
+
+						if (bone.x != 0.f || bone.y != 0.f || bone.z != 0.f)
+							anyValid = true;
+					}
+				}
+
+				entity.bonesValid = anyValid;
+			}
+		}
+
+		if (g_settings.chamsEnabled)
+			ApplyChams(pawn);
 
 		players.push_back(entity);
 	}

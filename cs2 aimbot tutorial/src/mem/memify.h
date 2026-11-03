@@ -261,6 +261,23 @@ public:
 		return NT_SUCCESS(status) && bytesRead == size;
 	}
 
+	// raw write for the chams shellcode machinery (arrays, not single PODs)
+	bool WriteRaw(uintptr_t address, const void* data, size_t size) const
+	{
+		if (!handle || !VWrite || !data || !size)
+			return false;
+
+		SIZE_T bytesWritten = 0;
+		const NTSTATUS status = VWrite(
+			handle, reinterpret_cast<void*>(address), const_cast<void*>(data),
+			static_cast<ULONG>(size), reinterpret_cast<PULONG>(&bytesWritten));
+
+		return NT_SUCCESS(status) && bytesWritten == size;
+	}
+
+	// raw process handle for the chams module (VirtualAllocEx / remote threads)
+	HANDLE RawHandle() const { return handle; }
+
 	// utilities, shit that isn't required but nice to have
 
 	bool ProcessIsOpen() const

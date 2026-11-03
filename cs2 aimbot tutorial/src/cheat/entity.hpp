@@ -12,10 +12,10 @@ inline memify mem("cs2.exe");
 namespace offset
 {
 	// client.dll build 14193 / 2026-10-30 (a2x cs2-dumper)
-	// dwEntityList verified live in-game 2026-11-02: +0x20 vs dump (game rebuilt Oct 31)
-	constexpr std::ptrdiff_t dwEntityList = 0x271EB28;
-	constexpr std::ptrdiff_t dwViewMatrix = 0x256F1D0;
-	constexpr std::ptrdiff_t dwLocalPlayerPawn = 0x25698C8;
+	// dw* verified live in-game 2026-11-03 (game rebuilt Nov 3): entityList +0x80, localPawn +0x80 vs Nov 2
+	constexpr std::ptrdiff_t dwEntityList = 0x271EBA8;
+	constexpr std::ptrdiff_t dwViewMatrix = 0x256F250;
+	constexpr std::ptrdiff_t dwLocalPlayerPawn = 0x2569948;
 
 	constexpr std::ptrdiff_t m_hPlayerPawn = 0x92C;  // CCSPlayerController
 
@@ -29,6 +29,18 @@ namespace offset
 	constexpr std::ptrdiff_t m_modelState = 0x140;   // CSkeletonInstance
 	constexpr std::ptrdiff_t m_boneArray = 0x80;     // CModelState::m_pBones
 
+	// CGlowProperty (C_BasePlayerPawn::m_Glow) - chams via engine glow tampering
+	constexpr std::ptrdiff_t m_Glow = 0xDE8;
+	constexpr std::ptrdiff_t glow_fGlowColor = 0x8;   // Vector rgb
+	constexpr std::ptrdiff_t glow_iGlowType = 0x30;   // 1 = entity glow
+	constexpr std::ptrdiff_t glow_nGlowRange = 0x38;  // through-wall distance
+	constexpr std::ptrdiff_t glow_nGlowRangeMin = 0x3C;
+	constexpr std::ptrdiff_t glow_colorOverride = 0x40; // Color rgba bytes
+	constexpr std::ptrdiff_t glow_flGlowTime = 0x48;
+	constexpr std::ptrdiff_t glow_flGlowStartTime = 0x4C;
+	constexpr std::ptrdiff_t glow_bEligible = 0x50;
+	constexpr std::ptrdiff_t glow_bGlowing = 0x51;
+
 	// entity list layout
 	constexpr std::ptrdiff_t entityListStride = 0x8;
 	constexpr std::ptrdiff_t entityListOffset = 0x10;
@@ -36,7 +48,14 @@ namespace offset
 
 	// bone data: 0x20-byte entries, position at +0x0 (BoneJointData)
 	constexpr std::ptrdiff_t boneStride = 0x20;
-	constexpr int headBone = 6;
+	// verified live 2026-11-03: bone 6 = neck (~60u), bone 7 = head/eyes (~64u, eye height)
+	constexpr int headBone = 7;
+
+	// skeleton esp: bones we cache per player
+	constexpr int maxBones = 28;
+
+	// world-space offset from the eye bone to the top of the skull, for the esp box top
+	constexpr float headTopOffset = 9.f;
 
 	constexpr float headFallbackHeight = 65.f;
 }
@@ -50,6 +69,8 @@ public:
 
 	Vector Position;   // feet / origin
 	Vector headPos;    // head bone, cached on the reader thread
+	Vector bones[offset::maxBones] = {}; // full skeleton, cached on the reader thread
+	bool bonesValid = false;
 
 	uintptr_t pCSPlayerPawn = 0;
 	uintptr_t boneArray = 0;
@@ -84,11 +105,13 @@ inline Reader reader;
 class Aimbot
 {
 public:
+	bool aimActive = false; // toggle mode state
+
 	void doAimbot();
 
 private:
 	Vector GetAimPoint(const C_CSPlayerPawn& player);
-	bool findClosest(const std::vector<Vector>& playerPositions, Vector& out);
+	bool findClosest(const std::vector<Vector>& playerPositions, Vector& out, float fov);
 	void MoveMouseToPlayer(const Vector& position);
 };
 

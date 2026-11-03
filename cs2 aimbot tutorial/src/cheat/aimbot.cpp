@@ -1,4 +1,5 @@
 #include "entity.hpp"
+#include "../render/settings.hpp"
 
 Vector Aimbot::GetAimPoint(const C_CSPlayerPawn& player)
 {
@@ -13,8 +14,31 @@ Vector Aimbot::GetAimPoint(const C_CSPlayerPawn& player)
 
 void Aimbot::doAimbot()
 {
-	if (!(GetAsyncKeyState(VK_RBUTTON) & 0x8000))
+	if (!g_settings.aimEnabled)
 		return;
+
+	// hold mode: aim while the key is down; toggle mode: flip on each press
+	const bool keyDown = (GetAsyncKeyState(g_settings.aimKey) & 0x8000) != 0;
+	static bool prevKeyDown = false;
+
+	if (g_settings.aimToggle)
+	{
+		if (keyDown && !prevKeyDown)
+		{
+			aimActive = !aimActive;
+			printf("[esp] aim toggle %s\n", aimActive ? "on" : "off");
+		}
+
+		prevKeyDown = keyDown;
+
+		if (!aimActive)
+			return;
+	}
+	else
+	{
+		if (!keyDown)
+			return;
+	}
 
 	const std::vector<C_CSPlayerPawn> players = reader.Snapshot();
 
@@ -43,21 +67,22 @@ void Aimbot::doAimbot()
 
 	Vector closest;
 
-	if (!findClosest(targets, closest))
+	if (!findClosest(targets, closest, g_settings.aimFov))
 		return;
 
 	MoveMouseToPlayer(closest);
 }
 
-bool Aimbot::findClosest(const std::vector<Vector>& playerPositions, Vector& out)
+bool Aimbot::findClosest(const std::vector<Vector>& playerPositions, Vector& out, float fov)
 {
 	if (playerPositions.empty())
 		return false;
 
 	const Vector center_of_screen{ (float)GetSystemMetrics(SM_CXSCREEN) * 0.5f,
-								   (float)GetSystemMetrics(SM_CYSCREEN) * 0.5f, 0.f };
+									(float)GetSystemMetrics(SM_CYSCREEN) * 0.5f, 0.f };
 
-	float lowestDistance = 10000.f;
+	// fov is the aim radius in px, same circle the overlay draws around the crosshair
+	float lowestDistance = fov * fov;
 	int index = -1;
 
 	for (int i = 0; i < static_cast<int>(playerPositions.size()); ++i)
@@ -95,8 +120,12 @@ void Aimbot::MoveMouseToPlayer(const Vector& position)
 	static float carry_x = 0.f;
 	static float carry_y = 0.f;
 
-	carry_x += position.x - static_cast<float>(cursor.x);
-	carry_y += position.y - static_cast<float>(cursor.y);
+	// smoothness: 0/1 = full delta per tick (instant snap), higher = move a fraction
+	// of the remaining distance each tick for a gradual approach
+	const float step = g_settings.aimSmooth > 1.f ? 1.f / g_settings.aimSmooth : 1.f;
+
+	carry_x += (position.x - static_cast<float>(cursor.x)) * step;
+	carry_y += (position.y - static_cast<float>(cursor.y)) * step;
 
 	const LONG dx = static_cast<LONG>(carry_x);
 	const LONG dy = static_cast<LONG>(carry_y);
