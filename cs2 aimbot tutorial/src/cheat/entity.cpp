@@ -299,6 +299,36 @@ void Reader::FilterPlayers()
 		entity.boneArray = bones;
 		entity.health = health;
 		entity.team = team;
+
+		// nickname straight from the controller (we still hold its address here)
+		if (controller)
+			mem.ReadRaw(controller + offset::m_iszPlayerName, entity.name, sizeof(entity.name) - 1);
+
+		// active weapon -> item definition index
+		{
+			const auto resolveEntity = [&](uint32_t handle) -> uintptr_t {
+				const uintptr_t entry = mem.Read<uintptr_t>(
+					entityList + offset::entityListStride * ((handle & 0x7FFF) >> 9) + offset::entityListOffset);
+				return entry ? mem.Read<uintptr_t>(entry + offset::entityStride * (handle & 0x1FF)) : 0;
+			};
+
+			const uintptr_t weaponServices = mem.Read<uintptr_t>(pawn + offset::m_pWeaponServices);
+
+			if (weaponServices)
+			{
+				const uint32_t activeHandle = mem.Read<uint32_t>(weaponServices + offset::m_hActiveWeapon);
+
+				if (activeHandle && activeHandle != 0xFFFFFFFF)
+				{
+					const uintptr_t weapon = resolveEntity(activeHandle);
+
+					if (weapon)
+						entity.weaponId = mem.Read<uint16_t>(
+							weapon + offset::m_AttributeManager + offset::m_Item + offset::m_iItemDefinitionIndex);
+				}
+			}
+		}
+
 		entity.Position = mem.Read<Vector>(pawn + offset::m_vOldOrigin);
 		entity.headPos = GetHeadPosition(entity);
 

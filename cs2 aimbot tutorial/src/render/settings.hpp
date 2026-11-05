@@ -16,6 +16,13 @@ struct CheatSettings
 	bool skeletonEnabled = true; // bone lines over the box
 	ImVec4 skeletonColor = ImVec4(1.f, 1.f, 1.f, 1.f);
 
+	bool showNames = true;
+	bool showWeapons = true;
+	bool showHealthBar = true;
+
+	bool headDotEnabled = true;
+	float headDotRadius = 6.f;
+
 	float aimSmooth = 1.f; // 1 = instant snap, higher = smoother approach
 
 	// movement

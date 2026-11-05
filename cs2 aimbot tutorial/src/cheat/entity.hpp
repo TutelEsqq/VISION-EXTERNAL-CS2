@@ -11,11 +11,11 @@ inline memify mem("cs2.exe");
 
 namespace offset
 {
-	// client.dll build 14193 / 2026-10-30 (a2x cs2-dumper)
-	// dw* verified live in-game 2026-11-03 (game rebuilt Nov 3): entityList +0x80, localPawn +0x80 vs Nov 2
-	constexpr std::ptrdiff_t dwEntityList = 0x271EBA8;
-	constexpr std::ptrdiff_t dwViewMatrix = 0x256F250;
-	constexpr std::ptrdiff_t dwLocalPlayerPawn = 0x2569948;
+	// client.dll build / 2026-11-05 dump (a2x cs2-dumper)
+	// dw* taken from the fresh post-update dump; schema offsets verified unchanged
+	constexpr std::ptrdiff_t dwEntityList = 0x271FBB8;
+	constexpr std::ptrdiff_t dwViewMatrix = 0x2570250;
+	constexpr std::ptrdiff_t dwLocalPlayerPawn = 0x256A948;
 
 	constexpr std::ptrdiff_t m_hPlayerPawn = 0x92C;  // CCSPlayerController
 
@@ -54,6 +54,14 @@ namespace offset
 	// skeleton esp: bones we cache per player
 	constexpr int maxBones = 28;
 
+	// esp info: nick / weapon
+	constexpr std::ptrdiff_t m_iszPlayerName = 0x6FC;      // CCSPlayerController, char[128]
+	constexpr std::ptrdiff_t m_pWeaponServices = 0x12F0;   // C_BasePlayerPawn
+	constexpr std::ptrdiff_t m_hActiveWeapon = 0x60;       // CPlayer_WeaponServices
+	constexpr std::ptrdiff_t m_AttributeManager = 0x1290;  // C_EconEntity
+	constexpr std::ptrdiff_t m_Item = 0x50;                // C_AttributeContainer
+	constexpr std::ptrdiff_t m_iItemDefinitionIndex = 0x1BA; // C_EconItemView
+
 	// world-space offset from the eye bone to the top of the skull, for the esp box top
 	constexpr float headTopOffset = 9.f;
 
@@ -71,6 +79,9 @@ public:
 	Vector headPos;    // head bone, cached on the reader thread
 	Vector bones[offset::maxBones] = {}; // full skeleton, cached on the reader thread
 	bool bonesValid = false;
+
+	char name[32] = {};   // controller nickname
+	uint16_t weaponId = 0; // active weapon item definition index
 
 	uintptr_t pCSPlayerPawn = 0;
 	uintptr_t boneArray = 0;

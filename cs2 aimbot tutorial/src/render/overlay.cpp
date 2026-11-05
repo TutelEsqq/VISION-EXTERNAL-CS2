@@ -323,6 +323,64 @@ namespace esp
 			}
 		}
 
+		// readable name for the common weapon ids (defindexes are stable since CS:GO)
+		const char* WeaponDisplayName(uint16_t id)
+		{
+			switch (id)
+			{
+			case 1: return "Desert Eagle";
+			case 2: return "Dual Berettas";
+			case 3: return "Five-SeveN";
+			case 4: return "Glock-18";
+			case 7: return "AK-47";
+			case 8: return "AUG";
+			case 9: return "AWP";
+			case 10: return "FAMAS";
+			case 11: return "G3SG1";
+			case 13: return "Galil AR";
+			case 14: return "M249";
+			case 16: return "M4A4";
+			case 17: return "MAC-10";
+			case 19: return "P90";
+			case 23: return "MP5-SD";
+			case 24: return "UMP-45";
+			case 25: return "XM1014";
+			case 26: return "PP-Bizon";
+			case 27: return "MAG-7";
+			case 28: return "Negev";
+			case 29: return "Sawed-Off";
+			case 30: return "Tec-9";
+			case 32: return "P2000";
+			case 33: return "MP7";
+			case 34: return "MP9";
+			case 35: return "Nova";
+			case 36: return "P250";
+			case 38: return "SCAR-20";
+			case 39: return "SG 553";
+			case 40: return "SSG 08";
+			case 42: case 500: return "Knife";
+			case 43: return "Flashbang";
+			case 44: return "HE Grenade";
+			case 45: return "Smoke";
+			case 46: return "Molotov";
+			case 47: return "Decoy";
+			case 48: return "Inc. Grenade";
+			case 49: return "C4";
+			case 59: return "Knife";
+			case 60: return "M4A1-S";
+			case 61: return "USP-S";
+			case 63: return "CZ75-Auto";
+			case 64: return "Revolver";
+			case 505: return "Flip Knife";
+			case 506: return "Gut Knife";
+			case 507: return "Karambit";
+			case 508: return "M9 Bayonet";
+			case 509: return "Huntsman";
+			}
+
+			return nullptr;
+		}
+
 		void DrawWorldOverlay(const std::vector<C_CSPlayerPawn>& players, const view_matrix_t& viewMatrix)
 		{
 			ImDrawList* draw = ImGui::GetBackgroundDrawList();
@@ -411,6 +469,64 @@ namespace esp
 				if (g_settings.skeletonEnabled)
 					DrawSkeleton(player, viewMatrix,
 						ImGui::ColorConvertFloat4ToU32(g_settings.skeletonColor), display);
+
+				// -------------------------------------------------- text + head dot
+
+				if (g_settings.headDotEnabled && g_settings.headDotRadius > 0.f)
+				{
+					Vector eyeScreen;
+
+					if (Vector::world_to_screen(viewMatrix, player.headPos, eyeScreen))
+					{
+						draw->AddCircleFilled(ImVec2(eyeScreen.x, eyeScreen.y),
+							g_settings.headDotRadius, IM_COL32(120, 220, 255, 90), 24);
+						draw->AddCircle(ImVec2(eyeScreen.x, eyeScreen.y),
+							g_settings.headDotRadius, IM_COL32(255, 255, 255, 200), 24, 1.f);
+					}
+				}
+
+				if (g_settings.showNames && player.name[0])
+				{
+					ImVec2 textSize = ImGui::CalcTextSize(player.name);
+					draw->AddText(ImVec2(headTop.x - textSize.x * 0.5f, headTop.y - textSize.y - 3.f),
+						IM_COL32(255, 255, 255, 230), player.name);
+				}
+
+				if (g_settings.showWeapons && player.weaponId)
+				{
+					const char* weaponName = WeaponDisplayName(player.weaponId);
+
+					if (weaponName)
+					{
+						// centered under the box, on the box's own horizontal axis
+						const float centerX = (left + right) * 0.5f;
+						const ImVec2 textSize = ImGui::CalcTextSize(weaponName);
+						draw->AddText(ImVec2(centerX - textSize.x * 0.5f, bottom + 3.f),
+							IM_COL32(255, 255, 255, 220), weaponName);
+					}
+				}
+
+				if (g_settings.showHealthBar && boxHeight > 0.f)
+				{
+					// vertical hp bar left of the box, drained from the bottom
+					const float barX = left - 6.f;
+					const float barW = 3.f;
+
+					draw->AddRectFilled(ImVec2(barX, top), ImVec2(barX + barW, bottom),
+						IM_COL32(10, 10, 10, 160));
+
+					const float hpFrac = player.health / 100.f;
+					const float fill = (bottom - top) * hpFrac;
+
+					if (fill > 0.f)
+					{
+						const ImU32 hpColor = player.health > 50
+							? IM_COL32(80, 220, 80, 220)
+							: (player.health > 25 ? IM_COL32(220, 200, 60, 220) : IM_COL32(220, 60, 60, 220));
+
+						draw->AddRectFilled(ImVec2(barX, bottom - fill), ImVec2(barX + barW, bottom), hpColor);
+					}
+				}
 			}
 		}
 
@@ -504,6 +620,21 @@ namespace esp
 
 					if (ImGui::Checkbox("Skeleton", &g_settings.skeletonEnabled))
 						printf("[esp] skeleton %s\n", g_settings.skeletonEnabled ? "on" : "off");
+
+					if (ImGui::Checkbox("Nicknames", &g_settings.showNames))
+						printf("[esp] nicknames %s\n", g_settings.showNames ? "on" : "off");
+
+					if (ImGui::Checkbox("Weapons", &g_settings.showWeapons))
+						printf("[esp] weapons %s\n", g_settings.showWeapons ? "on" : "off");
+
+					if (ImGui::Checkbox("Health bar", &g_settings.showHealthBar))
+						printf("[esp] health bar %s\n", g_settings.showHealthBar ? "on" : "off");
+
+					if (ImGui::Checkbox("Head dot", &g_settings.headDotEnabled))
+						printf("[esp] head dot %s\n", g_settings.headDotEnabled ? "on" : "off");
+
+					if (g_settings.headDotEnabled && ImGui::SliderFloat("Head dot radius", &g_settings.headDotRadius, 2.f, 30.f, "%.0f px"))
+						g_settings.headDotRadius = static_cast<float>(static_cast<int>(g_settings.headDotRadius));
 
 					if (ImGui::Checkbox("Corner boxes", &g_settings.cornerBoxes))
 						printf("[esp] corner boxes %s\n", g_settings.cornerBoxes ? "on" : "off");
